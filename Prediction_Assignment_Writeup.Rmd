@@ -1,0 +1,82 @@
+---
+title: "Prediction Assignment Writeup"
+author: "Mark Sandstorm"
+date: "Tuesday, December 16, 2015"
+output: html_document
+---
+**Executive Summary**
+
+This report concerns a machine learning (ML) model for predicting the manner in which a group of volunteers did an exercise based on a set of self-movement measurements provided in training data at https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv. The `classe` variable in the training data provides a quality classification of each observation into one of 5 classes, and the other 160 variables are potential predictors of the `classe` variable with ML model for new observations. Once the ML model has been developed, the `classe` will be predicted for the 20 'blind-classe' observations at https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv. 
+
+More background info is at: http://groupware.les.inf.puc-rio.br/har (see section Weight Lifting Exercise Dataset).
+
+This report describes how the ML model was built and cross validated, reasons for its design choices, and its expected out-of-sample error rate. 
+
+**Design of the ML Model**
+
+Random Forest was chosen as the first model to try the classification predictions, primarily due to its accuracy, as the main objective for the present assignment is to develop a model that correctly predicts the `classe` of the 20 blind validation test cases. Additional reasons and info on usage of the random forest method for training ML model for classification tasks such as the present project are documented in: https://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm.
+
+Further model design choices etc. details of developing and running the prediction model are explained in the following in connection with the model creation and execution R script:
+
+Initially, the required R libraries are loaded (and packages installed, as needed), and the training data is copied to the R working directory for reading in the training data frame `tr`:
+```
+library(caret)
+library(randomForest)
+set.seed(123)
+nas=c('NA','NaN','',' ','#DIV/0!')
+tr=read.csv('pml-training.csv',na.strings=nas)
+```
+Next, rows and columns providing, by their nature or lack or data or variability, little to no predictive ability for `classe` are eliminated from `tr`:
+```
+tr=Filter(function(c)!all(is.na(c)),tr)
+tr=tr[rowSums(is.na(tr))!=ncol(tr),]
+tr=subset(tr,new_window=='no')
+trc=tr$classe
+tr=subset(tr,select=-c(classe,X,user_name,raw_timestamp_part_1,raw_timestamp_part_2,cvtd_timestamp,num_window))
+tr=tr[,-nearZeroVar(tr)]
+```
+Further, variables that are all-NAs among the 20 validation test cases `v` are removed from the training set `tr`, as those variables would not be relevant as predictors for `classe` of the 20 validation test cases:
+```
+v=read.csv('pml-testing.csv',na.strings=nas)
+v=Filter(function(c)!all(is.na(c)),v)
+tr=tr[,names(tr) %in% names(v)]
+```
+At this stage, the number of potential predictors in `tr` is reduced from 160 to 53, which is already reasonably low. We will still eliminate the highly correlated predictors:
+```
+cors=abs(cor(tr))
+diag(cors)=0
+corc=which(cors>.95,arr.ind=T)
+tr=tr[-unique(corc[,1])]
+```
+Having finalized the subset of 45 predictors for the training set, `tr` we do the same for the validation test set `v`:
+```
+v=v[,names(v) %in% names(tr)]
+```
+Finally, we train the ML prediction model `m`, and predict the `classe` values for the 20 validation test cases:
+```
+m=randomForest(y=trc,x=tr)
+pv=predict(m,v)
+```
+**Evaluation of the ML Model**
+
+Training the model `m` with the 19216 row by 45 column `tr` takes roughly a minute on a regular Windows 7 PC with AMD A6 processor i.e. training this model is computationally reasonably efficient. Still, the estimated out-of-sample error rate of this prediction model (i.e. estimated error rate of predicting `classe` for previously unseen observations for the 45 predictors) is less than 0.5%, i.e., the model seems to be quite well generalizable, as seen by calling R print on `m`:
+
+```
+Call:
+ randomForest(x = tr, y = trc) 
+               Type of random forest: classification
+                     Number of trees: 500
+No. of variables tried at each split: 6
+
+        OOB estimate of  error rate: 0.42%
+Confusion matrix:
+     A    B    C    D    E  class.error
+A 5467    3    0    0    1 0.0007311278
+B   13 3700    5    0    0 0.0048413125
+C    0   18 3333    1    0 0.0056682578
+D    0    0   33 3111    3 0.0114394662
+E    0    0    2    2 3524 0.0011337868
+```
+Note that per https://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm, with random forests there is no need for cross-validation or a separate test set to get an unbiased estimate of the test set error, as it is estimated internally during the model training, with the OOB estimate of error rate (0.42% in our case, per above) proven to be unbiased in many tests.
+
+Also, the model `m` trained by the above script predicted correctly each of the 20 'blind' validation test cases in https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv.

@@ -68,31 +68,30 @@ img {
 
 
 <p><strong>Executive Summary</strong></p>
-<p>This report concerns a machine learning (ML) model for predicting the manner in which a group of volunteers did an exercise based on a set of self-movement measurements provided in training data at <a href="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv" class="uri">https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv</a>. The <code>classe</code> variable in the training data provides a classification of each observation into one of 5 classes, and the other 160 variables are potential predictors of the <code>classe</code> variable with ML model for new observations. Once the ML model has been developed, the <code>classe</code> will be predicted for the 20 ‘blind-classe’ observations at <a href="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv" class="uri">https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv</a>.</p>
+<p>This report concerns a machine learning (ML) model for predicting the manner in which a group of volunteers did an exercise based on a set of self-movement measurements provided in training data at <a href="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv" class="uri">https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv</a>. The <code>classe</code> variable in the training data provides a quality classification of each observation into one of 5 classes, and the other 160 variables are potential predictors of the <code>classe</code> variable with ML model for new observations. Once the ML model has been developed, the <code>classe</code> will be predicted for the 20 ‘blind-classe’ observations at <a href="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv" class="uri">https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv</a>.</p>
 <p>More background info is at: <a href="http://groupware.les.inf.puc-rio.br/har" class="uri">http://groupware.les.inf.puc-rio.br/har</a> (see section Weight Lifting Exercise Dataset).</p>
 <p>This report describes how the ML model was built and cross validated, reasons for its design choices, and its expected out-of-sample error rate.</p>
 <p><strong>Design of the ML Model</strong></p>
-<p>Random Forest was chosen as the first model to try the classification predictions, primarily due to its accuracy, as the main objective for the present assignment is to develop a model that correctly predicts the <code>classe</code> of the 20 blind test cases. Additional reasons and info on usage of the random forest method for training ML model for classification tasks such as the present project are documented in: <a href="https://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm" class="uri">https://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm</a></p>
+<p>Random Forest was chosen as the first model to try the classification predictions, primarily due to its accuracy, as the main objective for the present assignment is to develop a model that correctly predicts the <code>classe</code> of the 20 blind validation test cases. Additional reasons and info on usage of the random forest method for training ML model for classification tasks such as the present project are documented in: <a href="https://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm" class="uri">https://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm</a>.</p>
 <p>Further model design choices etc. details of developing and running the prediction model are explained in the following in connection with the model creation and execution R script:</p>
-<p>Initially, the required R libraries are loaded (and packages installed, as needed), and the training data is copied to the R working directory for reading into data frame <code>tr</code>:</p>
+<p>Initially, the required R libraries are loaded (and packages installed, as needed), and the training data is copied to the R working directory for reading in the training data frame <code>tr</code>:</p>
 <pre><code>library(caret)
 library(randomForest)
-set.seed(235)
+set.seed(123)
 nas=c('NA','NaN','',' ','#DIV/0!')
 tr=read.csv('pml-training.csv',na.strings=nas)</code></pre>
 <p>Next, rows and columns providing, by their nature or lack or data or variability, little to no predictive ability for <code>classe</code> are eliminated from <code>tr</code>:</p>
 <pre><code>tr=Filter(function(c)!all(is.na(c)),tr)
 tr=tr[rowSums(is.na(tr))!=ncol(tr),]
-tr=subset(tr,select=-c(X,user_name,raw_timestamp_part_1,raw_timestamp_part_2,cvtd_timestamp,num_window))
 tr=subset(tr,new_window=='no')
-tr=tr[,-nearZeroVar(tr)]
-trc=tr$classe</code></pre>
+trc=tr$classe
+tr=subset(tr,select=-c(classe,X,user_name,raw_timestamp_part_1,raw_timestamp_part_2,cvtd_timestamp,num_window))
+tr=tr[,-nearZeroVar(tr)]</code></pre>
 <p>Further, variables that are all-NAs among the 20 validation test cases <code>v</code> are removed from the training set <code>tr</code>, as those variables would not be relevant as predictors for <code>classe</code> of the 20 validation test cases:</p>
 <pre><code>v=read.csv('pml-testing.csv',na.strings=nas)
 v=Filter(function(c)!all(is.na(c)),v)
-tr=subset(tr,select=-c(classe))
 tr=tr[,names(tr) %in% names(v)]</code></pre>
-<p>At this stage, the number of potential predictors in <code>tr</code> is reduced from 160 to 53, which is already reasonably low. We will still eliminate the highly correlated co-variants:</p>
+<p>At this stage, the number of potential predictors in <code>tr</code> is reduced from 160 to 53, which is already reasonably low. We will still eliminate the highly correlated predictors:</p>
 <pre><code>cors=abs(cor(tr))
 diag(cors)=0
 corc=which(cors&gt;.95,arr.ind=T)
@@ -103,22 +102,22 @@ tr=tr[-unique(corc[,1])]</code></pre>
 <pre><code>m=randomForest(y=trc,x=tr)
 pv=predict(m,v)</code></pre>
 <p><strong>Evaluation of the ML Model</strong></p>
-<p>Training the model <code>m</code> with the 19216 row by 45 column <code>tr</code> takes roughly a minute on a regular Windows 7 PC with AMD A6 processor i.e. training this model is computationally reasonably efficient. Still, the estimated out-of-sample error rate of this prediction model (i.e. estimated error rate of predicting <code>classe</code> for previously unseen observations for the 45 predictors) is less than 0.4%, i.e., the model seems to be quite well generalizable, as seen by calling R print on <code>m</code>:</p>
+<p>Training the model <code>m</code> with the 19216 row by 45 column <code>tr</code> takes roughly a minute on a regular Windows 7 PC with AMD A6 processor i.e. training this model is computationally reasonably efficient. Still, the estimated out-of-sample error rate of this prediction model (i.e. estimated error rate of predicting <code>classe</code> for previously unseen observations for the 45 predictors) is less than 0.5%, i.e., the model seems to be quite well generalizable, as seen by calling R print on <code>m</code>:</p>
 <pre><code>Call:
  randomForest(x = tr, y = trc) 
                Type of random forest: classification
                      Number of trees: 500
 No. of variables tried at each split: 6
 
-        OOB estimate of  error rate: 0.38%
+        OOB estimate of  error rate: 0.42%
 Confusion matrix:
      A    B    C    D    E  class.error
-A 5469    2    0    0    0 0.0003655639
-B    7 3704    7    0    0 0.0037654653
-C    0   16 3336    0    0 0.0047732697
-D    0    0   32 3113    2 0.0108039403
-E    0    0    3    4 3521 0.0019841270</code></pre>
-<p>Note that per <a href="https://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm" class="uri">https://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm</a>, with random forests there is no need for cross-validation or a separate test set to get an unbiased estimate of the test set error, as it is estimated internally during the model training, with the OOB estimate of error rate (0.38% in our case, per above) proven to be unbiased in many tests.</p>
+A 5467    3    0    0    1 0.0007311278
+B   13 3700    5    0    0 0.0048413125
+C    0   18 3333    1    0 0.0056682578
+D    0    0   33 3111    3 0.0114394662
+E    0    0    2    2 3524 0.0011337868</code></pre>
+<p>Note that per <a href="https://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm" class="uri">https://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm</a>, with random forests there is no need for cross-validation or a separate test set to get an unbiased estimate of the test set error, as it is estimated internally during the model training, with the OOB estimate of error rate (0.42% in our case, per above) proven to be unbiased in many tests.</p>
 <p>Also, the model <code>m</code> trained by the above script predicted correctly each of the 20 ‘blind’ validation test cases in <a href="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv" class="uri">https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv</a>.</p>
 
 
